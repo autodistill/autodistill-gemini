@@ -15,6 +15,8 @@ This repository contains the code supporting the Gemini base model for use with 
 
 [Gemini](https://deepmind.google/technologies/gemini/), developed by Google, is a multimodal computer vision model that allows you to ask questions about images. You can use Gemini with Autodistill for image classification.
 
+You can combine Gemini with other base models to label regions of an object. For example, you can use Grounding DINO to identify abstract objects (i.e. a vinyl record) then Gemini to classify the object (i.e. say which of five vinyl records the region represents). Read the Autodistill [Combine Models](https://docs.autodistill.com/utilities/combine-models/) guide for more information.
+
 > [!NOTE]
 > Using this project will incur billing charges for API calls to the Gemini API.
 > Refer to the [Google Cloud pricing](https://cloud.google.com/pricing/) page for more information and to calculate your expected pricing. This package makes one API call per image you want to label.
@@ -47,11 +49,11 @@ base_model = Gemini(
             "a forklift": "forklift"
         }
     ),
-    api_key="api-key",
     gcp_region="us-central1",
     gcp_project="project-name",
 )
 
+# run inference on an image
 result = base_model.predict("image.jpg")
 
 print(result)

@@ -1,8 +1,11 @@
 import os
 from dataclasses import dataclass
 
-import requests
+import vertexai
+from vertexai.preview.generative_models import GenerativeModel, Image
 import supervision as sv
+from autodistill.helpers import load_image
+import numpy as np
 from autodistill.detection import CaptionOntology, DetectionBaseModel
 
 HOME = os.path.expanduser("~")
@@ -16,61 +19,34 @@ class Gemini(DetectionBaseModel):
     gcp_project: str
 
     def __init__(
-        self, ontology: CaptionOntology, api_key: str, gcp_region: str, gcp_project: str
+        self, ontology: CaptionOntology, gcp_region: str, gcp_project: str
     ) -> None:
         self.ontology = ontology
-        self.api_key = api_key
         self.gcp_region = gcp_region
         self.gcp_project = gcp_project
 
-    def predict(self, input: str, prompt: str, confidence: int = 0.5) -> sv.Detections:
-        payload = {
-            "contents": {
-                "role": "user",
-                "parts": [
-                    {
-                        "fileData": {
-                            "mimeType": "image/png",
-                            "fileUri": input,
-                        }
-                    },
-                    {"text": prompt},
-                ],
-            },
-            "safety_settings": {
-                "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-                "threshold": "BLOCK_LOW_AND_ABOVE",
-            },
-            "generation_config": {
-                "temperature": 0.4,
-                "topP": 1.0,
-                "topK": 32,
-                "maxOutputTokens": 2048,
-            },
-        }
+    def predict(
+        self, input: str, prompt: str = "", confidence: int = 0.5
+    ) -> sv.Detections:
+        if not prompt:
+            prompt = "Which of the following labels best describes this image?\n"
 
-        response = requests.post(
-            f"https://{self.gcp_region}-aiplatform.googleapis.com/v1/projects/{self.gcp_project}/locations/{self.gcp_region}/publishers/google/models/gemini-pro-vision:streamGenerateContent",
-            json=payload,
-            headers={"Authorization": f"Bearer {self.api_key}"},
+            for caption in self.ontology.prompts():
+                prompt += f"- {caption}\n"
+
+            prompt += "\n"
+
+            prompt += "Only return the exact label."
+
+        vertexai.init(project=self.gcp_project, location=self.gcp_region)
+
+        multimodal_model = GenerativeModel("gemini-pro-vision")
+
+        response = multimodal_model.generate_content(
+            [prompt, Image.load_from_file(input)]
         )
 
-    #       "candidates": [
-    # {
-    #   "content": {
-    #     "parts": [
-    #       {
-    #         "text": string
-    #       }
-    #     ]
-    #   },
-
-        if not response.ok:
-            raise Exception(response.text)
-
-        response_body = response.json()
-
-        text_response = response_body["candidates"][0]["content"]["parts"][0]["text"]
+        text_response = response.text.strip()
 
         prompts = self.ontology.prompts()
 
@@ -80,6 +56,8 @@ class Gemini(DetectionBaseModel):
             is_in.append(prompt in text_response)
 
         return sv.Classifications(
-            class_ids=self.ontology.class_ids(),
-            confidence=[1 if i else 0 for i in is_in],
+            class_id=np.array(
+                [self.ontology.prompts().index(caption) for caption in prompts]
+            ),
+            confidence=np.array([1 if i else 0 for i in is_in]),
         )
