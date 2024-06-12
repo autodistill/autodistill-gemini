@@ -13,17 +13,25 @@ HOME = os.path.expanduser("~")
 
 @dataclass
 class Gemini(DetectionBaseModel):
+    AVAILABLE_MODELS = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro-vision"]
     ontology: CaptionOntology
     api_key: str
     gcp_region: str
     gcp_project: str
+    model: str
 
     def __init__(
-        self, ontology: CaptionOntology, gcp_region: str, gcp_project: str
+        self, ontology: CaptionOntology, gcp_region: str, gcp_project: str, model: str
     ) -> None:
         self.ontology = ontology
         self.gcp_region = gcp_region
         self.gcp_project = gcp_project
+
+        if model in self.AVAILABLE_MODELS:
+            self.model = model
+        else:
+            raise ValueError(f"Choose one of the available models from {available_models}")
+
 
     def predict(
         self, input: str, prompt: str = "", confidence: int = 0.5
@@ -40,7 +48,7 @@ class Gemini(DetectionBaseModel):
 
         vertexai.init(project=self.gcp_project, location=self.gcp_region)
 
-        multimodal_model = GenerativeModel("gemini-pro-vision")
+        multimodal_model = GenerativeModel(self.model)
 
         response = multimodal_model.generate_content(
             [prompt, Image.load_from_file(input)]
