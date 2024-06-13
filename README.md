@@ -51,6 +51,7 @@ base_model = Gemini(
     ),
     gcp_region="us-central1",
     gcp_project="project-name",
+    model="gemini-1.5-flash"
 )
 
 # run inference on an image
